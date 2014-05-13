@@ -1,0 +1,44 @@
+<monitor>
+    <name>log-monitor</name>
+    <type>managed</type>
+    <description>Log Monitoring Extension</description>
+    <monitor-configuration></monitor-configuration>
+    <monitor-run-task>
+        <execution-style>periodic</execution-style>
+        <execution-frequency-in-seconds>60</execution-frequency-in-seconds>
+        <name>Log Monitor Run task</name>
+        <display-name>Log Monitor Run task</display-name>
+        <description>Log Monitor Run task</description>
+        <type>java</type>
+        <execution-timeout-in-secs>180</execution-timeout-in-secs>
+        
+        <task-arguments>
+        	<!-- provide the full path of the file inc name, e.g. /var/log/server.log -->
+            <argument name="file.path.1" is-required="true" default-value=""/>
+            
+            <!-- 
+            	You can define multiple search strings by using comma as delimiter, e.g. 
+            	e.g. <...default-value="firstString, secondString, thirdString">
+            	Note that search strings are NOT case sensitive
+            -->
+            <argument name="search.strings.for.file.1" is-required="true" default-value=""/>
+            
+            <!--
+            	Useful if you want to provide a more meaningful log name to display in metric browser
+            	This is also essential if you're monitoring multiple log files whereby the actual filename is the same to avoid metrics collision
+            -->
+            <argument name="filename.alias.for.file.1" is-required="false" default-value=""/>
+            
+            <!--
+        		To monitor multiple log files, add a new set of arguments with incremented index for each file, i.e.
+        		file.path.2, search.string.for.file.2, filename.alias.for.file.2, etc
+        	-->
+            
+        </task-arguments>
+        <java-task>
+            <classpath>log-monitoring-extension.jar</classpath>
+            <impl-class>com.appdynamics.extensions.logmonitor.LogMonitor</impl-class>
+            
+        </java-task>
+    </monitor-run-task>
+</monitor>

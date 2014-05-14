@@ -1,17 +1,11 @@
 package com.appdynamics.extensions.logmonitor;
 
-import static com.appdynamics.extensions.logmonitor.LogMonitor.ARG_FILENAME_ALIAS_PREFIX;
-import static com.appdynamics.extensions.logmonitor.LogMonitor.ARG_FILEPATH_PREFIX;
-import static com.appdynamics.extensions.logmonitor.LogMonitor.ARG_SEARCH_STRING_PREFIX;
-import static com.appdynamics.extensions.logmonitor.LogMonitor.DEFAULT_DELIMETER;
-import static com.appdynamics.extensions.logmonitor.LogMonitor.FILESIZE_METRIC_NAME;
+import static com.appdynamics.extensions.logmonitor.LogMonitor.*;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
-import static org.powermock.api.mockito.PowerMockito.mockStatic;
 import static org.powermock.api.mockito.PowerMockito.spy;
 import static org.powermock.api.mockito.PowerMockito.verifyPrivate;
-import static org.powermock.api.mockito.PowerMockito.when;
 import static org.powermock.api.mockito.PowerMockito.whenNew;
 
 import java.io.File;
@@ -37,13 +31,12 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
-import com.appdynamics.extensions.PathResolver;
 import com.singularity.ee.agent.systemagent.api.AManagedMonitor;
 import com.singularity.ee.agent.systemagent.api.MetricWriter;
 import com.singularity.ee.agent.systemagent.api.exception.TaskExecutionException;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({PathResolver.class, LogMonitor.class})
+@PrepareForTest({LogMonitor.class})
 public class LogMonitorTest {
 	
 	@Mock
@@ -53,8 +46,6 @@ public class LogMonitorTest {
 	
 	@Before
 	public void init() throws Exception {
-		mockStatic(PathResolver.class);
-		when(PathResolver.resolveDirectory(LogMonitor.class)).thenReturn(getTargetDir());
 		whenNew(MetricWriter.class).withArguments(any(AManagedMonitor.class), anyString()).thenReturn(mockMetricWriter);
 		classUnderTest = spy(new LogMonitor());
 	}
@@ -80,10 +71,10 @@ public class LogMonitorTest {
 		
 		classUnderTest.execute(args, null);
 		
-		verifyMetric(testFilename, "Debug", 13);
-		verifyMetric(testFilename, "Info", 24);
-		verifyMetric(testFilename, "Error", 7);
-		verifyMetric(testFilename, FILESIZE_METRIC_NAME, getFileSize(testFilepath));
+		verifyMetric(getSearchStringMetricName(testFilename, "Debug"), 13);
+		verifyMetric(getSearchStringMetricName(testFilename, "Info"), 24);
+		verifyMetric(getSearchStringMetricName(testFilename, "Error"), 7);
+		verifyMetric(getFileSizeMetricName(testFilename), getFileSize(testFilepath));
 	}
 	
 	@Test
@@ -99,10 +90,10 @@ public class LogMonitorTest {
 		
 		classUnderTest.execute(args, null);
 		
-		verifyMetric(testFilenameAlias, "Debug", 13);
-		verifyMetric(testFilenameAlias, "Info", 24);
-		verifyMetric(testFilenameAlias, "Error", 7);
-		verifyMetric(testFilenameAlias, FILESIZE_METRIC_NAME, getFileSize(testFilepath));
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "Debug"), 13);
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "Info"), 24);
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "Error"), 7);
+		verifyMetric(getFileSizeMetricName(testFilenameAlias), getFileSize(testFilepath));
 	}
 	
 	@Test
@@ -121,13 +112,13 @@ public class LogMonitorTest {
 		
 		classUnderTest.execute(args, null);
 		
-		verifyMetric(testFilename1, "Debug", 13);
-		verifyMetric(testFilename1, "Info", 24);
-		verifyMetric(testFilename1, "Error", 7);
-		verifyMetric(testFilename1, FILESIZE_METRIC_NAME, getFileSize(testFilepath1));
+		verifyMetric(getSearchStringMetricName(testFilename1, "Debug"), 13);
+		verifyMetric(getSearchStringMetricName(testFilename1, "Info"), 24);
+		verifyMetric(getSearchStringMetricName(testFilename1, "Error"), 7);
+		verifyMetric(getFileSizeMetricName(testFilename1), getFileSize(testFilepath1));
 		
-		verifyMetric(testFilename2, "Trace", 10);
-		verifyMetric(testFilename2, FILESIZE_METRIC_NAME, getFileSize(testFilepath2));
+		verifyMetric(getSearchStringMetricName(testFilename2, "Trace"), 10);
+		verifyMetric(getFileSizeMetricName(testFilename2), getFileSize(testFilepath2));
 	}
 	
 	@Test
@@ -145,13 +136,13 @@ public class LogMonitorTest {
 		
 		classUnderTest.execute(args, null);
 		
-		verifyMetric(testFilename, "Debug", 13);
-		verifyMetric(testFilename, "Info", 24);
-		verifyMetric(testFilename, "Error", 7);
+		verifyMetric(getSearchStringMetricName(testFilename, "Debug"), 13);
+		verifyMetric(getSearchStringMetricName(testFilename, "Info"), 24);
+		verifyMetric(getSearchStringMetricName(testFilename, "Error"), 7);
 		
 		// perform log update
 		long fileSizeBeforeUpdate = getFileSize(testFilepath);
-		verifyMetric(testFilename, FILESIZE_METRIC_NAME, fileSizeBeforeUpdate);
+		verifyMetric(getFileSizeMetricName(testFilename), fileSizeBeforeUpdate);
 		
 		List<String> logsToAdd = Arrays.asList("",
 				new Date() + "|DEBUG|This is the first line", 
@@ -164,12 +155,12 @@ public class LogMonitorTest {
 		
 		classUnderTest.execute(args, null);
 		
-		verifyMetric(testFilename, "Debug", 3);
-		verifyMetric(testFilename, "Info", 2);
-		verifyMetric(testFilename, "Error", 0);
+		verifyMetric(getSearchStringMetricName(testFilename, "Debug"), 3);
+		verifyMetric(getSearchStringMetricName(testFilename, "Info"), 2);
+		verifyMetric(getSearchStringMetricName(testFilename, "Error"), 0);
 		
 		long fileSizeAfterUpdate = getFileSize(testFilepath);
-		verifyMetric(testFilename, FILESIZE_METRIC_NAME, fileSizeAfterUpdate);
+		verifyMetric(getFileSizeMetricName(testFilename), fileSizeAfterUpdate);
 		
 		assertTrue("Updated file should've been bigger", fileSizeAfterUpdate > fileSizeBeforeUpdate);
 	}
@@ -189,10 +180,10 @@ public class LogMonitorTest {
 		
 		classUnderTest.execute(args, null);
 		
-		verifyMetric(testFilename, "Trace", 10);
+		verifyMetric(getSearchStringMetricName(testFilename, "Trace"), 10);
 		
 		long fileSizeBeforeRotation = getFileSize(testFilepath);
-		verifyMetric(testFilename, FILESIZE_METRIC_NAME, fileSizeBeforeRotation);
+		verifyMetric(getFileSizeMetricName(testFilename), fileSizeBeforeRotation);
 		
 		// rotate log with these string		
 		List<String> logsToAdd = Arrays.asList(
@@ -206,12 +197,23 @@ public class LogMonitorTest {
 		
 		classUnderTest.execute(args, null);
 		
-		verifyMetric(testFilename, "Trace", 2);
+		verifyMetric(getSearchStringMetricName(testFilename, "Trace"), 2);
 		
 		long fileSizeAfterRotation = getFileSize(testFilepath);
-		verifyMetric(testFilename, FILESIZE_METRIC_NAME, fileSizeAfterRotation);
+		verifyMetric(getFileSizeMetricName(testFilename), fileSizeAfterRotation);
 		
 		assertTrue("Rotated log should've been smaller", fileSizeAfterRotation < fileSizeBeforeRotation);		
+	}
+	
+	@After
+	public void deleteFilePointerFile() throws Exception {
+		String filePointerPath = Whitebox.invokeMethod(classUnderTest, "getFilePointerPath");
+		
+		File filePointerFile = new File(filePointerPath);
+		
+		if (filePointerFile.exists()) {
+			filePointerFile.delete();
+		}
 	}
 	
 	private void updateLogFile(String filepath, List<String> stringList, boolean append) throws Exception {
@@ -228,13 +230,21 @@ public class LogMonitorTest {
     	}
 	}
 	
-	private void verifyMetric(String filename, String metricName, long value) throws Exception {
-		String metricPrefix = Whitebox.getInternalState(classUnderTest, "metricPrefix");
-		String fullMetricName = String.format("%s%s%s%s", metricPrefix, filename, 
-				DEFAULT_DELIMETER, metricName);
-				
+	private void verifyMetric(String metricName, long value) throws Exception {
 		verifyPrivate(classUnderTest).invoke("printCollectiveObservedCurrent", 
-				fullMetricName, BigInteger.valueOf(value));
+				metricName, BigInteger.valueOf(value));
+	}
+	
+	private String getSearchStringMetricName(String filename, String searchString) {
+		String metricPrefix = Whitebox.getInternalState(classUnderTest, "metricPrefix");
+		return String.format("%s%s%s%s%s", metricPrefix, filename, 
+				DEFAULT_DELIMETER, SEARCH_STRING_METRIC_PREFIX, searchString);
+	}
+	
+	private String getFileSizeMetricName(String filename) {
+		String metricPrefix = Whitebox.getInternalState(classUnderTest, "metricPrefix");
+		return String.format("%s%s%s%s", metricPrefix, filename, 
+				DEFAULT_DELIMETER, FILESIZE_METRIC_NAME);
 	}
 	
 	private long getFileSize(String filepath) throws Exception {
@@ -256,18 +266,6 @@ public class LogMonitorTest {
 		} finally {
 			sourceChannel.close();
 			destChannel.close();
-		}
-	}
-	
-	@After
-	public void deleteFilePointerFile() {
-		String filePointerPath = String.format("%s%s%s", getTargetDir().getPath(),
-				File.separator, LogMonitor.FILEPOINTER_FILENAME);
-		
-		File filePointerFile = new File(filePointerPath);
-		
-		if (filePointerFile.exists()) {
-			filePointerFile.delete();
 		}
 	}
 	

@@ -17,7 +17,7 @@
             <argument name="file.path.1" is-required="true" default-value=""/>
             
             <!-- 
-            	You can define multiple search strings by using comma as delimiter, e.g. 
+            	You can define multiple search strings by using comma as delimiter 
             	e.g. <...default-value="firstString, secondString, thirdString">
             	Note that search strings are NOT case sensitive
             -->
@@ -25,20 +25,22 @@
             
             <!--
             	Useful if you want to provide a more meaningful log name to display in metric browser
-            	This is also essential if you're monitoring multiple log files whereby the actual filename is the same to avoid metrics collision
+            	This is also essential if you're monitoring multiple log files whereby 
+            	the actual filename is the same to avoid metrics collision
             -->
             <argument name="filename.alias.for.file.1" is-required="false" default-value=""/>
             
             <!--
-        		To monitor multiple log files, add a new set of arguments with incremented index for each file, i.e.
-        		file.path.2, search.string.for.file.2, filename.alias.for.file.2, etc
+        		To monitor multiple log files, add a new set of arguments for each file with incremented index, 
+        		i.e. file.path.2, search.strings.for.file.2, filename.alias.for.file.2, etc
         	-->
             
         </task-arguments>
+        
         <java-task>
             <classpath>log-monitoring-extension.jar</classpath>
             <impl-class>com.appdynamics.extensions.logmonitor.LogMonitor</impl-class>
-            
         </java-task>
+        
     </monitor-run-task>
 </monitor>

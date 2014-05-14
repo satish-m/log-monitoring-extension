@@ -5,6 +5,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.math.BigInteger;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +17,6 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.WordUtils;
 import org.apache.log4j.Logger;
 
-import com.appdynamics.extensions.PathResolver;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
 import com.singularity.ee.agent.systemagent.api.AManagedMonitor;
@@ -26,8 +26,9 @@ import com.singularity.ee.agent.systemagent.api.TaskOutput;
 import com.singularity.ee.agent.systemagent.api.exception.TaskExecutionException;
 
 /**
+ * Monitors the log file and counts the no of occurrences of the search terms provided
  * 
- * @author florencio.sarmiento
+ * @author Florencio Sarmiento
  *
  */
 public class LogMonitor extends AManagedMonitor {
@@ -42,7 +43,9 @@ public class LogMonitor extends AManagedMonitor {
 	
 	public static final String DEFAULT_DELIMETER = "|";
 	
-	public static final String DEFAULT_METRIC_PREFIX = "Custom Metrics|LoggerMonitor|";
+	public static final String DEFAULT_METRIC_PREFIX = "Custom Metrics|LogMonitor|";
+	
+	public static final String SEARCH_STRING_METRIC_PREFIX = "Search String|";
 	
 	public static final String FILESIZE_METRIC_NAME = "File size (Bytes)";
 	
@@ -276,13 +279,14 @@ public class LogMonitor extends AManagedMonitor {
 	}
 	
 	private void uploadMetrics(String filename, long fileSize, Map<String, BigInteger> wordMetrics) {
-		String metricNamePrefix =  String.format("%s%s%s", metricPrefix, filename, DEFAULT_DELIMETER);
+		String baseMetricNamePrefix =  String.format("%s%s%s", metricPrefix, filename, DEFAULT_DELIMETER);
+		String wordMetricPrefix = baseMetricNamePrefix + SEARCH_STRING_METRIC_PREFIX;
 		
 		for (Map.Entry<String, BigInteger> metric : wordMetrics.entrySet()) {
-			printCollectiveObservedCurrent(metricNamePrefix + metric.getKey(), metric.getValue());
+			printCollectiveObservedCurrent(wordMetricPrefix + metric.getKey(), metric.getValue());
 		}
 		
-		printCollectiveObservedCurrent(metricNamePrefix + FILESIZE_METRIC_NAME, BigInteger.valueOf(fileSize));
+		printCollectiveObservedCurrent(baseMetricNamePrefix + FILESIZE_METRIC_NAME, BigInteger.valueOf(fileSize));
 	}
 	
     private void printCollectiveObservedCurrent(String metricName, BigInteger metricValue) {
@@ -337,8 +341,33 @@ public class LogMonitor extends AManagedMonitor {
     }
     
     private String getFilePointerPath() {
-    	return String.format("%s%s%s", PathResolver.resolveDirectory(LogMonitor.class).getPath(), 
-    			File.separator, FILEPOINTER_FILENAME);
+    	String path = null;
+    	
+    	try {
+    		URL url = LogMonitor.class.getResource(LogMonitor.class.getSimpleName() + ".class");
+    		File file = new File(url.toURI().getPath());
+    		String parentDir = file.getParentFile().toURI().getPath();
+    		
+    		if (parentDir.endsWith(File.separator)) {
+    			path = parentDir + FILEPOINTER_FILENAME;
+    					
+    		} else {
+    			path = String.format("%s%s%s", parentDir , 
+            			File.separator, FILEPOINTER_FILENAME);
+    		}
+    		
+    	} catch (Exception ex) {
+    		LOGGER.warn("Unable to resolve installation dir, finding alternative.");
+    	}
+    	
+    	if (StringUtils.isBlank(path)) {
+    		path = String.format("%s%s%s", new File(".").getAbsolutePath(), 
+        			File.separator, FILEPOINTER_FILENAME);
+    	}
+    	
+    	LOGGER.info("Using filepointer path: " + path);
+    	
+    	return path;
     }
     
     private Long convertFilePointerToLong(String stringFilePointer) {

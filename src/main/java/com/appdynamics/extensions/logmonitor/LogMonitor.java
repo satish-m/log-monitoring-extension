@@ -344,20 +344,29 @@ public class LogMonitor extends AManagedMonitor {
     	String path = null;
     	
     	try {
-    		URL url = LogMonitor.class.getResource(LogMonitor.class.getSimpleName() + ".class");
-    		File file = new File(url.toURI().getPath());
-    		String parentDir = file.getParentFile().toURI().getPath();
+    		URL classUrl = LogMonitor.class.getResource(LogMonitor.class.getSimpleName() + ".class");
+    		String jarPath = classUrl.toURI().toString();
     		
-    		if (parentDir.endsWith(File.separator)) {
-    			path = parentDir + FILEPOINTER_FILENAME;
+    		// workaround for jar file
+    		jarPath = jarPath.replace("jar:", "").replace("file:", "");
+    		
+    		if (jarPath.contains("!")) {
+    			jarPath = jarPath.substring(0, jarPath.indexOf("!"));
+    		}
+    		
+    		File file = new File(jarPath);
+    		String jarDir = file.getParentFile().toURI().getPath();
+    		
+    		if (jarDir.endsWith(File.separator)) {
+    			path = jarDir + FILEPOINTER_FILENAME;
     					
     		} else {
-    			path = String.format("%s%s%s", parentDir , 
+    			path = String.format("%s%s%s", jarDir , 
             			File.separator, FILEPOINTER_FILENAME);
     		}
     		
     	} catch (Exception ex) {
-    		LOGGER.warn("Unable to resolve installation dir, finding alternative.");
+    		LOGGER.warn("Unable to resolve installation dir, finding an alternative.");
     	}
     	
     	if (StringUtils.isBlank(path)) {

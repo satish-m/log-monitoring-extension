@@ -3,7 +3,6 @@ package com.appdynamics.extensions.logmonitor;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.math.BigInteger;
 import java.net.URL;
 import java.util.HashMap;
@@ -16,6 +15,7 @@ import java.util.regex.Pattern;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.WordUtils;
 import org.apache.log4j.Logger;
+import org.bitbucket.kienerj.OptimizedRandomAccessFile;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
@@ -114,10 +114,10 @@ public class LogMonitor extends AManagedMonitor {
     	debugLog("Initialising filepointers");
     	File file = new File(getFilePointerPath());
     	
-    	RandomAccessFile randomAccessFile = null;
+    	OptimizedRandomAccessFile randomAccessFile = null;
 		
 		try {
-			randomAccessFile = new RandomAccessFile(file, "rws");
+			randomAccessFile = new OptimizedRandomAccessFile(file, "rws");
 			
 			String currentLine = null;
 			
@@ -216,12 +216,12 @@ public class LogMonitor extends AManagedMonitor {
 			return;
 		}
 		
-		RandomAccessFile randomAccessFile = null;
+		OptimizedRandomAccessFile randomAccessFile = null;
 		long fileSize = 0;
 		long filePointer = 0;
 		
 		try {
-			randomAccessFile = new RandomAccessFile(file, "r");
+			randomAccessFile = new OptimizedRandomAccessFile(file, "r");
 			
 			fileSize = randomAccessFile.length();
 			filePointer = getFilePointer(filepath, fileSize);
@@ -395,7 +395,7 @@ public class LogMonitor extends AManagedMonitor {
     	return filePointer != null ? filePointer : 0;
     }
 	
-	private void closeRandomAccessFile(String filepath, RandomAccessFile randomAccessFile) {
+	private void closeRandomAccessFile(String filepath, OptimizedRandomAccessFile randomAccessFile) {
 		if (randomAccessFile != null) {
 			try {
 				randomAccessFile.close();

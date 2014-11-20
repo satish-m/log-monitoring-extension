@@ -205,6 +205,49 @@ public class LogMonitorTest {
 		assertTrue("Rotated log should've been smaller", fileSizeAfterRotation < fileSizeBeforeRotation);		
 	}
 	
+	@Test
+	public void testExactMatchStringIsTrue() throws Exception {
+		String testFilenameAlias = "TestLog";
+		String testFilename = "test-log-3.log";
+		String testFilepath = this.getClass().getClassLoader().getResource(testFilename).getPath();
+		
+		Map<String, String> args = new HashMap<String, String>();
+		args.put(ARG_FILEPATH_PREFIX + 1, testFilepath);
+		args.put(ARG_SEARCH_STRING_PREFIX + 1, "404, 500, test@test.com, *test*, \"this\"");
+		args.put(ARG_MATCH_EXACT_STRING + 1, "true");
+		args.put(ARG_FILENAME_ALIAS_PREFIX + 1, testFilenameAlias);
+		
+		classUnderTest.execute(args, null);
+		
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "404"), 4);
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "500"), 2);
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "Test@test.com"), 0);
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "*test*"), 0);
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "\"this\""), 1);
+	}
+	
+	@Test
+	public void testExactMatchStringIsFalse() throws Exception {
+		String testFilenameAlias = "TestLog";
+		String testFilename = "test-log-3.log";
+		String testFilepath = this.getClass().getClassLoader().getResource(testFilename).getPath();
+		
+		Map<String, String> args = new HashMap<String, String>();
+		args.put(ARG_FILEPATH_PREFIX + 1, testFilepath);
+		args.put(ARG_SEARCH_STRING_PREFIX + 1, "404, 500, test@test.com, *test*");
+		args.put(ARG_MATCH_EXACT_STRING + 1, "false");
+		args.put(ARG_FILENAME_ALIAS_PREFIX + 1, testFilenameAlias);
+		
+		classUnderTest.execute(args, null);
+		
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "404"), 10);
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "500"), 3);
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "Test@test.com"), 1);
+		verifyMetric(getSearchStringMetricName(testFilenameAlias, "*test*"), 1);
+	}
+	
+
+	
 	@After
 	public void deleteFilePointerFile() throws Exception {
 		String filePointerPath = Whitebox.invokeMethod(classUnderTest, "getFilePointerPath");

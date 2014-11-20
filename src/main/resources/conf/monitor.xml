@@ -19,9 +19,15 @@
             <!-- 
             	You can define multiple search strings by using comma as delimiter 
             	e.g. <...default-value="firstString, secondString, thirdString">
-            	Note that search strings are NOT case sensitive
+            	Note that search strings are NOT case sensitive and DO NOT support regex
             -->
             <argument name="search.strings.for.file.1" is-required="true" default-value=""/>
+
+            <!-- 
+            	If set to true, it only matches the exact string defined, and not contains in string
+            	e.g. search string = 404 will be matched in 404, http 404 and not in $404, 5404, 4040392, etc
+            -->
+            <argument name="match.exact.string.in.file.1" is-required="false" default-value="false"/>
             
             <!--
             	Useful if you want to provide a more meaningful log name to display in metric browser

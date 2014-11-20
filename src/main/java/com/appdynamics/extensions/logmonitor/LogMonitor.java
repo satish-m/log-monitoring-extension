@@ -41,6 +41,8 @@ public class LogMonitor extends AManagedMonitor {
 	
 	public static final String ARG_SEARCH_STRING_PREFIX = "search.strings.for.file.";
 	
+	public static final String ARG_MATCH_EXACT_STRING = "match.exact.string.in.file.";
+	
 	public static final String DEFAULT_DELIMETER = "|";
 	
 	public static final String DEFAULT_METRIC_PREFIX = "Custom Metrics|LogMonitor|";
@@ -95,9 +97,10 @@ public class LogMonitor extends AManagedMonitor {
 				}
 				
 				String filenameAlias = args.get(ARG_FILENAME_ALIAS_PREFIX + index);
+				boolean matchExactWord = Boolean.valueOf(args.get(ARG_MATCH_EXACT_STRING + index));
 
 				Map<String, BigInteger> wordMetrics = new HashMap<String, BigInteger>();
-				String formattedSearchString = reformatSearchStringAndInitialiseWordMetrics(rawSearchString, wordMetrics);
+				String formattedSearchString = reformatSearchStringAndInitialiseWordMetrics(rawSearchString, wordMetrics, matchExactWord);
 				processLogFile(filepath, filenameAlias, formattedSearchString, wordMetrics);
 				filePointerFileRequiresUpdate = true;
 			}
@@ -177,7 +180,8 @@ public class LogMonitor extends AManagedMonitor {
 		}
 	}
 	
-	private String reformatSearchStringAndInitialiseWordMetrics(String rawSearchString, Map<String, BigInteger> wordMetrics) {
+	private String reformatSearchStringAndInitialiseWordMetrics(String rawSearchString, Map<String, BigInteger> wordMetrics,
+			boolean matchExactWord) {
 		List<String> searchStringList = Lists.newArrayList(Splitter.on(SEARCH_STRING_RAW_DELIMETER)
 				.trimResults()
 				.omitEmptyStrings()
@@ -190,6 +194,13 @@ public class LogMonitor extends AManagedMonitor {
 		for (String searchString : searchStringList) {
 			searchString = WordUtils.capitalizeFully(searchString);
 			wordMetrics.put(searchString, BigInteger.ZERO);
+			
+			if (matchExactWord) {
+				searchString = "(?<=\\s|^)" + Pattern.quote(searchString) + "(?=\\s|$)";
+				
+			} else {
+				searchString =  Pattern.quote(searchString);
+			}
 			
 			if (index > 0) {
 				formattedSearchString.append(DEFAULT_DELIMETER);
@@ -273,8 +284,17 @@ public class LogMonitor extends AManagedMonitor {
 		
 		while (matcher.find()) {
 			String word = WordUtils.capitalizeFully(matcher.group());
-			BigInteger count = wordMetrics.get(word);
-			wordMetrics.put(word, count.add(BigInteger.ONE));
+			
+			BigInteger count = null;
+			
+			if (wordMetrics.containsKey(word)) {
+				count = BigInteger.ONE.add(wordMetrics.get(word));
+				
+			} else {
+				count = BigInteger.ONE;
+			}
+			
+			wordMetrics.put(word, count);
 		}
 	}
 	

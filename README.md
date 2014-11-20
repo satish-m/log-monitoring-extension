@@ -16,7 +16,8 @@ This extension works only with standalone machine agent.
 2. Copy and unzip LogMonitor.zip from 'target' directory into \<machine_agent_dir\>/monitors/
 3. Edit monitor.xml file and provide the min required values for: 
 	- file.path.1 
-	- search.strings.for.file.1 
+	- search.strings.for.file.1
+	- match.exact.string.in.file.1 
 	- filename.alias.for.file.1	
 4. Restart the Machine Agent.
 
@@ -27,6 +28,7 @@ This extension works only with standalone machine agent.
 | ----- | ----- |
 | file.path.1 | The full path of the log file, e.g. /var/log/test.log  |
 | search.strings.for.file.1 | The search strings. For multiple search strings, use comma as delimiter, e.g. debug, info, error |
+| match.exact.string.in.file.1 | Allowed values: true or false - if set to true, it only matches the exact string defined, and not contains in string, e.g. search string = 404 will be matched in 404, http 404 and not in $404, 5404, 4040392, etc |
 | filename.alias.for.file.1 | The display name of the log file. If not specified, log filename is used by default. |
 
 **Note: To monitor multiple log files, add a new set of arguments with incremented index for each log file, see example monitor.xml below:**
@@ -50,11 +52,13 @@ This extension works only with standalone machine agent.
         	<!-- This is the first log to monitor -->
             <argument name="file.path.1" is-required="true" default-value="/var/log/test.log"/>
             <argument name="search.strings.for.file.1" is-required="true" default-value="debug, info, warn, error"/>
+            <argument name="match.exact.string.in.file.1" is-required="false" default-value="true"/>
             <argument name="filename.alias.for.file.1" is-required="false" default-value="TestLog"/>
             
             <!-- This is the second log file to monitor -->
             <argument name="file.path.2" is-required="true" default-value="/var/log/test2.log"/>
             <argument name="search.strings.for.file.2" is-required="true" default-value="error"/>
+            <argument name="match.exact.string.in.file.2" is-required="false" default-value="false"/>
             <argument name="filename.alias.for.file.2" is-required="false" default-value="AnotherLog"/>            
         </task-arguments>
         

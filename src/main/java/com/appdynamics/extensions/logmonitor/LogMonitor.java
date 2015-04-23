@@ -3,8 +3,10 @@ package com.appdynamics.extensions.logmonitor;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.net.URL;
+import java.net.URLDecoder;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -393,6 +395,13 @@ public class LogMonitor extends AManagedMonitor {
     		path = String.format("%s%s%s", new File(".").getAbsolutePath(), 
         			File.separator, FILEPOINTER_FILENAME);
     	}
+    	
+    	try {
+			path = URLDecoder.decode(path, "UTF-8");
+			
+		} catch (UnsupportedEncodingException e) {
+			LOGGER.warn(String.format("Unable to decode file path [%s] using UTF-8", path));
+		}
     	
     	LOGGER.info("Using filepointer path: " + path);
     	

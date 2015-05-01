@@ -1,52 +1,62 @@
 package com.appdynamics.extensions.logmonitor;
 
-import static com.appdynamics.extensions.logmonitor.LogMonitor.*;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.when;
 import static org.powermock.api.mockito.PowerMockito.spy;
 import static org.powermock.api.mockito.PowerMockito.verifyPrivate;
 import static org.powermock.api.mockito.PowerMockito.whenNew;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.RandomAccessFile;
+import java.io.FileNotFoundException;
 import java.math.BigInteger;
-import java.nio.channels.FileChannel;
-import java.util.Arrays;
-import java.util.Date;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.lang.StringUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-import org.powermock.reflect.Whitebox;
 
+import com.appdynamics.extensions.logmonitor.config.Log;
+import com.appdynamics.extensions.logmonitor.processors.FilePointerProcessor;
+import com.appdynamics.extensions.logmonitor.util.LogMonitorUtil;
+import com.appdynamics.extensions.yml.YmlReader;
+import com.google.common.collect.Maps;
 import com.singularity.ee.agent.systemagent.api.AManagedMonitor;
 import com.singularity.ee.agent.systemagent.api.MetricWriter;
 import com.singularity.ee.agent.systemagent.api.exception.TaskExecutionException;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({LogMonitor.class})
+@PrepareForTest({LogMonitor.class, LogMonitorUtil.class,
+	YmlReader.class})
+@PowerMockIgnore({"org.apache.*, javax.xml.*"})
 public class LogMonitorTest {
 	
 	@Mock
 	private MetricWriter mockMetricWriter;
 	
+	@Mock
+	private LogMonitorTask mockLogMonitorTask;
+	
+	@Mock
+	private FilePointerProcessor mockFilePointerProcessor;
+	
 	private LogMonitor classUnderTest;
 	
 	@Before
 	public void init() throws Exception {
-		whenNew(MetricWriter.class).withArguments(any(AManagedMonitor.class), anyString()).thenReturn(mockMetricWriter);
+		whenNew(MetricWriter.class).withArguments(any(AManagedMonitor.class), 
+				anyString()).thenReturn(mockMetricWriter);
+		
+		whenNew(FilePointerProcessor.class)
+			.withNoArguments().thenReturn(mockFilePointerProcessor);
+		
+		setupTestMetricsAndLogMetricTask();
+		
 		classUnderTest = spy(new LogMonitor());
 	}
 	
@@ -60,260 +70,63 @@ public class LogMonitorTest {
 		classUnderTest.execute(new HashMap<String, String>(), null);
 	}
 	
-	@Test
-	public void testSingleLogFile() throws Exception {
-		String testFilename = "test-log-1.log";
-		String testFilepath = this.getClass().getClassLoader().getResource(testFilename).getPath();
-		
-		Map<String, String> args = new HashMap<String, String>();
-		args.put(ARG_FILEPATH_PREFIX + 1, testFilepath);
-		args.put(ARG_SEARCH_STRING_PREFIX + 1, "debug, info, error");
+	@Test(expected=TaskExecutionException.class)
+	public void testWithNoValidLogConfigResultInException() throws Exception {
+		Map<String, String> args = Maps.newHashMap();
+		args.put("config-file", "src/test/resources/conf/no-valid-log-config.yaml");
 		
 		classUnderTest.execute(args, null);
-		
-		verifyMetric(getSearchStringMetricName(testFilename, "Debug"), 13);
-		verifyMetric(getSearchStringMetricName(testFilename, "Info"), 24);
-		verifyMetric(getSearchStringMetricName(testFilename, "Error"), 7);
-		verifyMetric(getFileSizeMetricName(testFilename), getFileSize(testFilepath));
 	}
 	
 	@Test
-	public void testSingleLogFileWithAlias() throws Exception {
-		String testFilenameAlias = "TestLog";
-		String testFilename = "test-log-1.log";
-		String testFilepath = this.getClass().getClassLoader().getResource(testFilename).getPath();
+	public void testExceptionOccurredInLogMonitorTask() throws Exception {
+		Map<String, String> args = Maps.newHashMap();
+		args.put("config-file", "src/test/resources/conf/single-log-config.yaml");
 		
-		Map<String, String> args = new HashMap<String, String>();
-		args.put(ARG_FILEPATH_PREFIX + 1, testFilepath);
-		args.put(ARG_SEARCH_STRING_PREFIX + 1, "debug, info, error");
-		args.put(ARG_FILENAME_ALIAS_PREFIX + 1, testFilenameAlias);
+		when(mockLogMonitorTask.call()).thenThrow(new FileNotFoundException());
 		
 		classUnderTest.execute(args, null);
 		
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "Debug"), 13);
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "Info"), 24);
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "Error"), 7);
-		verifyMetric(getFileSizeMetricName(testFilenameAlias), getFileSize(testFilepath));
+		verifyNotCalled("Custom Metrics|LogMonitor|TestLog|Search String|Debug", BigInteger.valueOf(7));
+		verifyNotCalled("Custom Metrics|LogMonitor|TestLog|Search String|Info", BigInteger.valueOf(8));
+		verifyNotCalled("Custom Metrics|LogMonitor|TestLog|Search String|Error", BigInteger.valueOf(9));
+		verifyNotCalled("Custom Metrics|LogMonitor|TestLog|File size (Bytes)", BigInteger.valueOf(10));
 	}
 	
 	@Test
-	public void testMultipleLogFiles() throws Exception {
-		String testFilename1 = "test-log-1.log";
-		String testFilepath1 = this.getClass().getClassLoader().getResource(testFilename1).getPath();
-		
-		String testFilename2 = "test-log-2.log";
-		String testFilepath2 = this.getClass().getClassLoader().getResource(testFilename2).getPath();
-		
-		Map<String, String> args = new HashMap<String, String>();
-		args.put(ARG_FILEPATH_PREFIX + 1, testFilepath1);
-		args.put(ARG_SEARCH_STRING_PREFIX + 1, "debug, info, error");
-		args.put(ARG_FILEPATH_PREFIX + 2, testFilepath2);
-		args.put(ARG_SEARCH_STRING_PREFIX + 2, "trace");
+	public void testMetricsAreReportedCorrectly() throws Exception {
+		Map<String, String> args = Maps.newHashMap();
+		args.put("config-file", "src/test/resources/conf/single-log-config.yaml");
 		
 		classUnderTest.execute(args, null);
 		
-		verifyMetric(getSearchStringMetricName(testFilename1, "Debug"), 13);
-		verifyMetric(getSearchStringMetricName(testFilename1, "Info"), 24);
-		verifyMetric(getSearchStringMetricName(testFilename1, "Error"), 7);
-		verifyMetric(getFileSizeMetricName(testFilename1), getFileSize(testFilepath1));
-		
-		verifyMetric(getSearchStringMetricName(testFilename2, "Trace"), 10);
-		verifyMetric(getFileSizeMetricName(testFilename2), getFileSize(testFilepath2));
+		verifyMetric("Custom Metrics|LogMonitor|TestLog|Search String|Debug", BigInteger.valueOf(7));
+		verifyMetric("Custom Metrics|LogMonitor|TestLog|Search String|Info", BigInteger.valueOf(8));
+		verifyMetric("Custom Metrics|LogMonitor|TestLog|Search String|Error", BigInteger.valueOf(9));
+		verifyMetric("Custom Metrics|LogMonitor|TestLog|File size (Bytes)", BigInteger.valueOf(10));
 	}
 	
-	@Test
-	public void testLogFileUpdatedWithMoreLogs() throws Exception {
-		String originalFilePath = this.getClass().getClassLoader().getResource("test-log-1.log").getPath();
+	private void setupTestMetricsAndLogMetricTask() throws Exception {
+		LogMetrics logMetrics = new LogMetrics();
+		logMetrics.add("TestLog|Search String|Debug", BigInteger.valueOf(7));
+		logMetrics.add("TestLog|Search String|Info", BigInteger.valueOf(8));
+		logMetrics.add("TestLog|Search String|Error", BigInteger.valueOf(9));
+		logMetrics.add("TestLog|File size (Bytes)", BigInteger.valueOf(10));
 		
-		String testFilename = "active-test-log.log";
-		String testFilepath = String.format("%s%s%s", getTargetDir().getPath(), File.separator, testFilename);
+		whenNew(LogMonitorTask.class).withArguments(any(FilePointerProcessor.class), 
+				any(Log.class)).thenReturn(mockLogMonitorTask);
 		
-		copyFile(originalFilePath, testFilepath);
-		
-		Map<String, String> args = new HashMap<String, String>();
-		args.put(ARG_FILEPATH_PREFIX + 1, testFilepath);
-		args.put(ARG_SEARCH_STRING_PREFIX + 1, "debug, info, error");
-		
-		classUnderTest.execute(args, null);
-		
-		verifyMetric(getSearchStringMetricName(testFilename, "Debug"), 13);
-		verifyMetric(getSearchStringMetricName(testFilename, "Info"), 24);
-		verifyMetric(getSearchStringMetricName(testFilename, "Error"), 7);
-		
-		// perform log update
-		long fileSizeBeforeUpdate = getFileSize(testFilepath);
-		verifyMetric(getFileSizeMetricName(testFilename), fileSizeBeforeUpdate);
-		
-		List<String> logsToAdd = Arrays.asList("",
-				new Date() + "|DEBUG|This is the first line", 
-				new Date() + "|INFO|This is the second line",
-				new Date() + "|INFO|This is the third line",
-				new Date() + "|DEBUG|This is the fourth line",
-				new Date() + "|DEBUG|This is the fifth line");
-		
-		updateLogFile(testFilepath, logsToAdd, true);
-		
-		classUnderTest.execute(args, null);
-		
-		verifyMetric(getSearchStringMetricName(testFilename, "Debug"), 3);
-		verifyMetric(getSearchStringMetricName(testFilename, "Info"), 2);
-		verifyMetric(getSearchStringMetricName(testFilename, "Error"), 0);
-		
-		long fileSizeAfterUpdate = getFileSize(testFilepath);
-		verifyMetric(getFileSizeMetricName(testFilename), fileSizeAfterUpdate);
-		
-		assertTrue("Updated file should've been bigger", fileSizeAfterUpdate > fileSizeBeforeUpdate);
+		when(mockLogMonitorTask.call()).thenReturn(logMetrics);
 	}
 	
-	@Test
-	public void testLogFileRotated() throws Exception {
-		String originalFilePath = this.getClass().getClassLoader().getResource("test-log-2.log").getPath();
-		
-		String testFilename = "rotated-test-log.log";
-		String testFilepath = String.format("%s%s%s", getTargetDir().getPath(), File.separator, testFilename);
-		
-		copyFile(originalFilePath, testFilepath);
-		
-		Map<String, String> args = new HashMap<String, String>();
-		args.put(ARG_FILEPATH_PREFIX + 1, testFilepath);
-		args.put(ARG_SEARCH_STRING_PREFIX + 1, "trace");
-		
-		classUnderTest.execute(args, null);
-		
-		verifyMetric(getSearchStringMetricName(testFilename, "Trace"), 10);
-		
-		long fileSizeBeforeRotation = getFileSize(testFilepath);
-		verifyMetric(getFileSizeMetricName(testFilename), fileSizeBeforeRotation);
-		
-		// rotate log with these string		
-		List<String> logsToAdd = Arrays.asList(
-				new Date() + "|TRACE|This is the first line", 
-				new Date() + "|DEBUG|This is the second line",
-				new Date() + "|TRACE|This is the third line",
-				new Date() + "|INFO|This is the fourth line",
-				new Date() + "|DEBUG|This is the fifth line");
-		
-		updateLogFile(testFilepath, logsToAdd, false);
-		
-		classUnderTest.execute(args, null);
-		
-		verifyMetric(getSearchStringMetricName(testFilename, "Trace"), 2);
-		
-		long fileSizeAfterRotation = getFileSize(testFilepath);
-		verifyMetric(getFileSizeMetricName(testFilename), fileSizeAfterRotation);
-		
-		assertTrue("Rotated log should've been smaller", fileSizeAfterRotation < fileSizeBeforeRotation);		
-	}
-	
-	@Test
-	public void testExactMatchStringIsTrue() throws Exception {
-		String testFilenameAlias = "TestLog";
-		String testFilename = "test-log-3.log";
-		String testFilepath = this.getClass().getClassLoader().getResource(testFilename).getPath();
-		
-		Map<String, String> args = new HashMap<String, String>();
-		args.put(ARG_FILEPATH_PREFIX + 1, testFilepath);
-		args.put(ARG_SEARCH_STRING_PREFIX + 1, "404, 500, test@test.com, *test*, \"this\"");
-		args.put(ARG_MATCH_EXACT_STRING + 1, "true");
-		args.put(ARG_FILENAME_ALIAS_PREFIX + 1, testFilenameAlias);
-		
-		classUnderTest.execute(args, null);
-		
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "404"), 4);
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "500"), 2);
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "Test@test.com"), 0);
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "*test*"), 0);
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "\"this\""), 1);
-	}
-	
-	@Test
-	public void testExactMatchStringIsFalse() throws Exception {
-		String testFilenameAlias = "TestLog";
-		String testFilename = "test-log-3.log";
-		String testFilepath = this.getClass().getClassLoader().getResource(testFilename).getPath();
-		
-		Map<String, String> args = new HashMap<String, String>();
-		args.put(ARG_FILEPATH_PREFIX + 1, testFilepath);
-		args.put(ARG_SEARCH_STRING_PREFIX + 1, "404, 500, test@test.com, *test*");
-		args.put(ARG_MATCH_EXACT_STRING + 1, "false");
-		args.put(ARG_FILENAME_ALIAS_PREFIX + 1, testFilenameAlias);
-		
-		classUnderTest.execute(args, null);
-		
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "404"), 10);
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "500"), 3);
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "Test@test.com"), 1);
-		verifyMetric(getSearchStringMetricName(testFilenameAlias, "*test*"), 1);
-	}
-	
-
-	
-	@After
-	public void deleteFilePointerFile() throws Exception {
-		String filePointerPath = Whitebox.invokeMethod(classUnderTest, "getFilePointerPath");
-		
-		File filePointerFile = new File(filePointerPath);
-		
-		if (filePointerFile.exists()) {
-			filePointerFile.delete();
-		}
-	}
-	
-	private void updateLogFile(String filepath, List<String> stringList, boolean append) throws Exception {
-    	File file = new File(filepath);
-    	FileWriter fileWriter = null;
-    	
-    	try {
-    		fileWriter = new FileWriter(file, append);
-    		String output = StringUtils.join(stringList, System.getProperty("line.separator"));
-    		fileWriter.write(output);
-    		
-    	} finally {
-    		fileWriter.close();
-    	}
-	}
-	
-	private void verifyMetric(String metricName, long value) throws Exception {
+	private void verifyMetric(String metricName, BigInteger value) throws Exception {
 		verifyPrivate(classUnderTest).invoke("printCollectiveObservedCurrent", 
-				metricName, BigInteger.valueOf(value));
+				metricName, value);
 	}
 	
-	private String getSearchStringMetricName(String filename, String searchString) {
-		String metricPrefix = Whitebox.getInternalState(classUnderTest, "metricPrefix");
-		return String.format("%s%s%s%s%s", metricPrefix, filename, 
-				DEFAULT_DELIMETER, SEARCH_STRING_METRIC_PREFIX, searchString);
-	}
-	
-	private String getFileSizeMetricName(String filename) {
-		String metricPrefix = Whitebox.getInternalState(classUnderTest, "metricPrefix");
-		return String.format("%s%s%s%s", metricPrefix, filename, 
-				DEFAULT_DELIMETER, FILESIZE_METRIC_NAME);
-	}
-	
-	private long getFileSize(String filepath) throws Exception {
-		RandomAccessFile file = new RandomAccessFile(filepath, "r");
-		long fileSize = file.length();
-		file.close();
-		return fileSize;
-	}
-	
-	private void copyFile(String sourceFilePath, String destFilePath) throws Exception {
-		FileChannel sourceChannel = null;
-	    FileChannel destChannel = null;
-	    
-	    try {
-	        sourceChannel = new FileInputStream(new File(sourceFilePath)).getChannel();
-	        destChannel = new FileOutputStream(new File (destFilePath)).getChannel();
-	        destChannel.transferFrom(sourceChannel, 0, sourceChannel.size());
-	        
-		} finally {
-			sourceChannel.close();
-			destChannel.close();
-		}
-	}
-	
-	private File getTargetDir() {
-		return new File("./target");
+	private void verifyNotCalled(String metricName, BigInteger value) throws Exception {
+		verifyPrivate(classUnderTest, never()).invoke("printCollectiveObservedCurrent", 
+				metricName, value);
 	}
 
 }

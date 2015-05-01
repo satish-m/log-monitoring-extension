@@ -1,0 +1,12 @@
+logs:
+  - displayName: ""
+    logDirectory: ""
+    logName: ""
+    searchStrings: [ ]
+    matchExactString: false
+        
+# Number of concurrent threads
+noOfThreads: 3
+
+#prefix used to show up metrics in AppDynamics 
+metricPrefix: "Custom Metrics|LogMonitor|"

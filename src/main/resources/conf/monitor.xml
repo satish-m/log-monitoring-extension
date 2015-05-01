@@ -10,39 +10,12 @@
         <display-name>Log Monitor Run task</display-name>
         <description>Log Monitor Run task</description>
         <type>java</type>
-        <execution-timeout-in-secs>180</execution-timeout-in-secs>
+        <execution-timeout-in-secs>60</execution-timeout-in-secs>
         
-        <task-arguments>
-        	<!-- provide the full path of the file inc name, e.g. /var/log/server.log -->
-            <argument name="file.path.1" is-required="true" default-value=""/>
+		<task-arguments>
+			<argument name="config-file" is-required="true" default-value="monitors/LogMonitor/conf/config.yaml" />
+		</task-arguments>
             
-            <!-- 
-            	You can define multiple search strings by using comma as delimiter 
-            	e.g. <...default-value="firstString, secondString, thirdString">
-            	Note that search strings are NOT case sensitive and DO NOT support regex
-            -->
-            <argument name="search.strings.for.file.1" is-required="true" default-value=""/>
-
-            <!-- 
-            	If set to true, it only matches the exact string defined, and not contains in string
-            	e.g. search string = 404 will be matched in 404, http 404 and not in $404, 5404, 4040392, etc
-            -->
-            <argument name="match.exact.string.in.file.1" is-required="false" default-value="false"/>
-            
-            <!--
-            	Useful if you want to provide a more meaningful log name to display in metric browser
-            	This is also essential if you're monitoring multiple log files whereby 
-            	the actual filename is the same to avoid metrics collision
-            -->
-            <argument name="filename.alias.for.file.1" is-required="false" default-value=""/>
-            
-            <!--
-        		To monitor multiple log files, add a new set of arguments for each file with incremented index, 
-        		i.e. file.path.2, search.strings.for.file.2, filename.alias.for.file.2, etc
-        	-->
-            
-        </task-arguments>
-        
         <java-task>
             <classpath>log-monitoring-extension.jar</classpath>
             <impl-class>com.appdynamics.extensions.logmonitor.LogMonitor</impl-class>

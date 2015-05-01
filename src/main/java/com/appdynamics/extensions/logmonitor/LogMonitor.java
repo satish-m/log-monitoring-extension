@@ -1,26 +1,28 @@
 package com.appdynamics.extensions.logmonitor;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import static com.appdynamics.extensions.logmonitor.Constants.*;
+import static com.appdynamics.extensions.logmonitor.util.LogMonitorUtil.*;
+import static com.appdynamics.extensions.logmonitor.config.LogConfigValidator.*;
+import static com.appdynamics.extensions.yml.YmlReader.readFromFile;
+
 import java.math.BigInteger;
-import java.net.URL;
-import java.net.URLDecoder;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.WordUtils;
 import org.apache.log4j.Logger;
-import org.bitbucket.kienerj.OptimizedRandomAccessFile;
 
-import com.google.common.base.Splitter;
-import com.google.common.collect.Lists;
+import com.appdynamics.extensions.logmonitor.config.Configuration;
+import com.appdynamics.extensions.logmonitor.config.Log;
+import com.appdynamics.extensions.logmonitor.processors.FilePointerProcessor;
 import com.singularity.ee.agent.systemagent.api.AManagedMonitor;
 import com.singularity.ee.agent.systemagent.api.MetricWriter;
 import com.singularity.ee.agent.systemagent.api.TaskExecutionContext;
@@ -37,278 +39,133 @@ public class LogMonitor extends AManagedMonitor {
 	
 	public static final Logger LOGGER = Logger.getLogger("com.singularity.extensions.LogMonitor");
 	
-	public static final String ARG_FILEPATH_PREFIX = "file.path.";
-	
-	public static final String ARG_FILENAME_ALIAS_PREFIX = "filename.alias.for.file.";
-	
-	public static final String ARG_SEARCH_STRING_PREFIX = "search.strings.for.file.";
-	
-	public static final String ARG_MATCH_EXACT_STRING = "match.exact.string.in.file.";
-	
-	public static final String DEFAULT_DELIMETER = "|";
-	
-	public static final String DEFAULT_METRIC_PREFIX = "Custom Metrics|LogMonitor|";
-	
-	public static final String SEARCH_STRING_METRIC_PREFIX = "Search String|";
-	
-	public static final String FILESIZE_METRIC_NAME = "File size (Bytes)";
-	
-	public static final String FILEPOINTER_FILENAME = "filepointer.txt";
-	
-	public static final String SEARCH_STRING_RAW_DELIMETER = ",";
-	
-	private String metricPrefix;
-	
-	private Map<String, Long> filePointers = new ConcurrentHashMap<String, Long>();
+	private volatile FilePointerProcessor filePointerProcessor;
 	
 	public LogMonitor() {
-		LOGGER.info(String.format("Using Monitor Version [%s]", getImplementationVersion()));
-		initialiseFilePointers();
+		LOGGER.info(String.format("Using Log Monitor Version [%s]", 
+				getImplementationVersion()));
+		filePointerProcessor = new FilePointerProcessor();
 	}
 	
 	public TaskOutput execute(Map<String, String> args,
 			TaskExecutionContext arg1) throws TaskExecutionException {
 		LOGGER.info("Starting the Logger Monitoring task");
 		
-		debugLog("Args received were: " + args);
-		
-		if (args == null || args.isEmpty()) {
-			throw new TaskExecutionException("You must provide at least one required filepath and search string!");
+		if (LOGGER.isDebugEnabled()) {
+			LOGGER.debug(String.format("Args received were: %s", args));
 		}
 		
-		setMetricPrefix(args);
-		boolean filePointerFileRequiresUpdate = false;
-		
-		for (String key : args.keySet()) {
-
-			if (key.startsWith(ARG_FILEPATH_PREFIX)) {
-				String filepath = args.get(key);
-
-				if (StringUtils.isBlank(filepath)) {
-					LOGGER.error("Filepath not provided for " + key);
-					continue;
-				}
-
-				String index = key.substring(ARG_FILEPATH_PREFIX.length());
-				String rawSearchString = args.get(ARG_SEARCH_STRING_PREFIX + index);
-
-				if (StringUtils.isBlank(rawSearchString)) {
-					LOGGER.error(String.format("No search strings provided for %s%s", 
-							ARG_SEARCH_STRING_PREFIX, index));
-					continue;
+		if (args != null) {
+			ExecutorService threadPool = null;
+			
+			try {
+				String configFilename = resolvePath(args.get(CONFIG_ARG));
+				Configuration config = readFromFile(configFilename, Configuration.class);
+				List<Log> logs = getValidLogConfigs(config);
+				
+				if (!logs.isEmpty()) {
+					int noOfThreads = config.getNoOfThreads() > 0 ? 
+							config.getNoOfThreads() : DEFAULT_NO_OF_THREADS;
+							threadPool = Executors.newFixedThreadPool(noOfThreads);
+							
+					CompletionService<LogMetrics> logMonitorTasks = 
+							createConcurrentTasks(threadPool, logs);
+					
+					LogMetrics logMetrics = collectMetrics(logMonitorTasks, logs.size());
+					uploadMetrics(logMetrics, getMetricPrefix(config));
+					
+					filePointerProcessor.updateFilePointerFile();
+					
+					return new TaskOutput("Apache Log Monitoring task successfully completed");
 				}
 				
-				String filenameAlias = args.get(ARG_FILENAME_ALIAS_PREFIX + index);
-				boolean matchExactWord = Boolean.valueOf(args.get(ARG_MATCH_EXACT_STRING + index));
-
-				Map<String, BigInteger> wordMetrics = new HashMap<String, BigInteger>();
-				String formattedSearchString = reformatSearchStringAndInitialiseWordMetrics(rawSearchString, wordMetrics, matchExactWord);
-				processLogFile(filepath, filenameAlias, formattedSearchString, wordMetrics);
-				filePointerFileRequiresUpdate = true;
+			} catch (Exception ex) {
+				LOGGER.error("Unfortunately an issue has occurred: ", ex);
+				
+			} finally {
+				if (threadPool != null && !threadPool.isShutdown()) {
+					threadPool.shutdown();
+				}
 			}
 		}
 		
-		if (filePointerFileRequiresUpdate) {
-			updateFilePointerFile();
-		}
-		
-		return new TaskOutput("LogMonitor Task Completed");
+		throw new TaskExecutionException("Log Monitoring task completed with failures.");
 	}
 	
-    private void initialiseFilePointers() {
-    	debugLog("Initialising filepointers");
-    	File file = new File(getFilePointerPath());
-    	
-    	OptimizedRandomAccessFile randomAccessFile = null;
+	private CompletionService<LogMetrics> createConcurrentTasks(ExecutorService threadPool,
+			 List<Log> logs) {
 		
-		try {
-			randomAccessFile = new OptimizedRandomAccessFile(file, "rws");
-			
-			String currentLine = null;
-			
-			while((currentLine = randomAccessFile.readLine()) != null) {
-				List<String> stringList = Lists.newArrayList(Splitter
-						.on(DEFAULT_DELIMETER)
-						.trimResults()
-						.omitEmptyStrings()
-						.split(currentLine));
-				
-				String filepath = null;
-				String stringFilePointer = null;
-				int index = 0;
-				
-				for (String value : stringList) {
-					if (index == 0) {
-						filepath = value;
-					} else {
-						stringFilePointer = value;
-						break;
-					}
-					
-					index++;
-				}
-				
-				if (StringUtils.isNotBlank(filepath)) {
-					Long filePointer = convertFilePointerToLong(stringFilePointer);
-					filePointers.put(filepath, filePointer);
-				}
-			}
-			
-		} catch (Exception e) {
-			LOGGER.error(String.format(
-					"Unfortunately an error occurred while reading the file %s", file.getPath()),
-					e);
-			return;
-			
-		} finally {
-			closeRandomAccessFile(file.getPath(), randomAccessFile);
+		CompletionService<LogMetrics> logMonitorTasks = 
+				new ExecutorCompletionService<LogMetrics>(threadPool);
+		
+		for (Log log : logs) {
+			LogMonitorTask task = new LogMonitorTask(filePointerProcessor, log);
+			logMonitorTasks.submit(task);
 		}
 		
-		debugLog("Filepointers initialised with: " + filePointers);
-    }
+		return logMonitorTasks;
+	}
 	
-	private void setMetricPrefix(Map<String, String> args) {
-		metricPrefix = args.get("metricPrefix");
+	private List<Log> getValidLogConfigs(Configuration config) {
+		List<Log> validLogs = new ArrayList<Log>();
+		
+		for (Log log : config.getLogs()) {
+			try {
+				validate(log);
+				validLogs.add(log);
+				
+			} catch (IllegalArgumentException ex) {
+				LOGGER.error("Invalid config: " + log, ex);
+			}
+		}
+		
+		return validLogs;
+	}
+	
+	private LogMetrics collectMetrics(CompletionService<LogMetrics> parallelTasks, int noOfTasks) {
+		LogMetrics metrics = new LogMetrics();
+		
+		for (int i=0; i<noOfTasks; i++) {
+			try {
+				LogMetrics collectedMetrics = 
+						parallelTasks.take().get(THREAD_TIMEOUT, TimeUnit.SECONDS);
+				metrics.addAll(collectedMetrics.getMetrics());
+				
+			} catch (InterruptedException e) {
+				LOGGER.error("Task interrupted. ", e);
+				
+			} catch (ExecutionException e) {
+				LOGGER.error("Task execution failed. ", e);
+				
+			} catch (TimeoutException e) {
+				LOGGER.error("Task timed out. ", e);
+			}
+		}
+		
+		return metrics;
+	}
+	
+	private String getMetricPrefix(Configuration config) {
+		String metricPrefix = config.getMetricPrefix();
 		
 		if (StringUtils.isBlank(metricPrefix)) {
-			metricPrefix = DEFAULT_METRIC_PREFIX;
+			metricPrefix = DEFAULT_METRIC_PATH;
 			
 		} else {
 			metricPrefix = metricPrefix.trim();
 			
-			if (!metricPrefix.endsWith(DEFAULT_DELIMETER)) {
-				metricPrefix = metricPrefix + DEFAULT_DELIMETER;
+			if (!metricPrefix.endsWith(METRIC_PATH_SEPARATOR)) {
+				metricPrefix = metricPrefix + METRIC_PATH_SEPARATOR;
 			}
 		}
+		
+		return metricPrefix;
 	}
 	
-	private String reformatSearchStringAndInitialiseWordMetrics(String rawSearchString, Map<String, BigInteger> wordMetrics,
-			boolean matchExactWord) {
-		List<String> searchStringList = Lists.newArrayList(Splitter.on(SEARCH_STRING_RAW_DELIMETER)
-				.trimResults()
-				.omitEmptyStrings()
-				.split(rawSearchString));
-
-		StringBuilder formattedSearchString = new StringBuilder();
-		
-		int index = 0;
-		
-		for (String searchString : searchStringList) {
-			searchString = WordUtils.capitalizeFully(searchString);
-			wordMetrics.put(searchString, BigInteger.ZERO);
-			
-			if (matchExactWord) {
-				searchString = "(?<=\\s|^)" + Pattern.quote(searchString) + "(?=\\s|$)";
-				
-			} else {
-				searchString =  Pattern.quote(searchString);
-			}
-			
-			if (index > 0) {
-				formattedSearchString.append(DEFAULT_DELIMETER);
-			}
-			
-			formattedSearchString.append(searchString);
-			index++;
+	private void uploadMetrics(LogMetrics logMetrics, String metricPrefix) {
+		for (Map.Entry<String, BigInteger> metric : logMetrics.getMetrics().entrySet()) {
+			printCollectiveObservedCurrent(metricPrefix + metric.getKey(), metric.getValue());
 		}
-		
-		return formattedSearchString.toString();
-	}
-	
-	private void processLogFile(String filepath, String filenameAlias, 
-			String searchString, Map<String, BigInteger> wordMetrics) {
-		
-		debugLog(String.format("Processing file [%s] with search strings [%s]",
-				filepath, searchString));
-		
-		File file = new File(filepath);
-		
-		if (!file.exists() || !file.canRead()) {
-			LOGGER.error(String.format(
-					"Unable to read %s. Check that it exists and has the appropriate read permission.", filepath));
-			return;
-		}
-		
-		OptimizedRandomAccessFile randomAccessFile = null;
-		long fileSize = 0;
-		long filePointer = 0;
-		
-		try {
-			randomAccessFile = new OptimizedRandomAccessFile(file, "r");
-			
-			fileSize = randomAccessFile.length();
-			filePointer = getFilePointer(filepath, fileSize);
-			
-			randomAccessFile.seek(filePointer);
-			
-			Pattern pattern = Pattern.compile(searchString, Pattern.CASE_INSENSITIVE);
-			String currentLineToSearch = null;
-			
-			while((currentLineToSearch = randomAccessFile.readLine()) != null) {
-				incrementWordCountIfSearchStringMatched(pattern, currentLineToSearch, wordMetrics);
-				filePointer = randomAccessFile.getFilePointer();
-			}
-			
-		} catch (Exception e) {
-			LOGGER.error(String.format(
-					"Unfortunately an error occurred while reading the file %s", filepath),
-					e);
-			return;
-			
-		} finally {
-			closeRandomAccessFile(filepath, randomAccessFile);
-		}
-		
-		String filename = StringUtils.isBlank(filenameAlias) ? file.getName() : filenameAlias;
-		
-		uploadMetrics(filename, fileSize, wordMetrics);
-		filePointers.put(filepath, filePointer);
-	}
-	
-	private long getFilePointer(String filepath, long fileSize) {
-		Long tmpFilePointer = filePointers.get(filepath);
-		long filePointer = tmpFilePointer != null ? tmpFilePointer : 0;
-		
-		if (isLogRotated(fileSize, filePointer)) {
-			filePointer = 0;
-		}
-		
-		return filePointer;
-	}
-	
-	private boolean isLogRotated(long fileSize, long startPosition) {
-		return fileSize < startPosition;
-	}
-	
-	private void incrementWordCountIfSearchStringMatched(Pattern pattern, 
-			String stringToCheck, Map<String, BigInteger> wordMetrics) {
-		Matcher matcher = pattern.matcher(stringToCheck);
-		
-		while (matcher.find()) {
-			String word = WordUtils.capitalizeFully(matcher.group());
-			
-			BigInteger count = null;
-			
-			if (wordMetrics.containsKey(word)) {
-				count = BigInteger.ONE.add(wordMetrics.get(word));
-				
-			} else {
-				count = BigInteger.ONE;
-			}
-			
-			wordMetrics.put(word, count);
-		}
-	}
-	
-	private void uploadMetrics(String filename, long fileSize, Map<String, BigInteger> wordMetrics) {
-		String baseMetricNamePrefix =  String.format("%s%s%s", metricPrefix, filename, DEFAULT_DELIMETER);
-		String wordMetricPrefix = baseMetricNamePrefix + SEARCH_STRING_METRIC_PREFIX;
-		
-		for (Map.Entry<String, BigInteger> metric : wordMetrics.entrySet()) {
-			printCollectiveObservedCurrent(wordMetricPrefix + metric.getKey(), metric.getValue());
-		}
-		
-		printCollectiveObservedCurrent(baseMetricNamePrefix + FILESIZE_METRIC_NAME, BigInteger.valueOf(fileSize));
 	}
 	
     private void printCollectiveObservedCurrent(String metricName, BigInteger metricValue) {
@@ -323,132 +180,16 @@ public class LogMonitor extends AManagedMonitor {
 		MetricWriter metricWriter = getMetricWriter(metricName, aggregation,
 				timeRollup, cluster);
         
-        String value = metricValue != null ? metricValue.toString() : BigInteger.ZERO.toString();
+		BigInteger valueToReport = convertValueToZeroIfNullOrNegative(metricValue);
         
-        debugLog(String.format("Sending [%s/%s/%s] metric = %s = %s",
+        if (LOGGER.isDebugEnabled()) {
+        	LOGGER.debug(String.format("Sending [%s/%s/%s] metric = %s = %s => %s",
             		aggregation, timeRollup, cluster,
-                    metricName, value));
+                    metricName, metricValue, valueToReport));
+        }
         
-        metricWriter.printMetric(value);
+        metricWriter.printMetric(valueToReport.toString());
     }
-    
-    private void updateFilePointerFile() {
-    	String filePointerPath = getFilePointerPath();
-    	debugLog("Updating " + filePointerPath);
-    	
-    	File file = new File(filePointerPath);
-    	FileWriter fileWriter = null;
-    	
-    	try {
-    		fileWriter = new FileWriter(file, false);
-    		StringBuilder output = new StringBuilder();
-    		
-    		for (Map.Entry<String, Long> filePointer : filePointers.entrySet()) {
-    			output.append(filePointer.getKey())
-    			.append(DEFAULT_DELIMETER)
-    			.append(filePointer.getValue())
-    			.append(System.getProperty("line.separator"));
-    		}
-    		
-    		fileWriter.write(output.toString());
-    		
-    	} catch (IOException ex) {
-    		LOGGER.error(String.format(
-					"Unfortunately an error occurred while reading the file %s", file.getPath()),
-					ex);
-    		
-    	} finally {
-    		closeFileWriter(filePointerPath, fileWriter);
-    	}
-    }
-    
-    private String getFilePointerPath() {
-    	String path = null;
-    	
-    	try {
-    		URL classUrl = LogMonitor.class.getResource(LogMonitor.class.getSimpleName() + ".class");
-    		String jarPath = classUrl.toURI().toString();
-    		
-    		// workaround for jar file
-    		jarPath = jarPath.replace("jar:", "").replace("file:", "");
-    		
-    		if (jarPath.contains("!")) {
-    			jarPath = jarPath.substring(0, jarPath.indexOf("!"));
-    		}
-    		
-    		File file = new File(jarPath);
-    		String jarDir = file.getParentFile().toURI().getPath();
-    		
-    		if (jarDir.endsWith(File.separator)) {
-    			path = jarDir + FILEPOINTER_FILENAME;
-    					
-    		} else {
-    			path = String.format("%s%s%s", jarDir , 
-            			File.separator, FILEPOINTER_FILENAME);
-    		}
-    		
-    	} catch (Exception ex) {
-    		LOGGER.warn("Unable to resolve installation dir, finding an alternative.");
-    	}
-    	
-    	if (StringUtils.isBlank(path)) {
-    		path = String.format("%s%s%s", new File(".").getAbsolutePath(), 
-        			File.separator, FILEPOINTER_FILENAME);
-    	}
-    	
-    	try {
-			path = URLDecoder.decode(path, "UTF-8");
-			
-		} catch (UnsupportedEncodingException e) {
-			LOGGER.warn(String.format("Unable to decode file path [%s] using UTF-8", path));
-		}
-    	
-    	LOGGER.info("Using filepointer path: " + path);
-    	
-    	return path;
-    }
-    
-    private Long convertFilePointerToLong(String stringFilePointer) {
-    	Long filePointer = null;
-    	
-    	try {
-    		filePointer = Long.valueOf(stringFilePointer);
-    		
-    	} catch (NumberFormatException ex) {
-    		if (LOGGER.isDebugEnabled()) {
-    			LOGGER.debug(String.format("Unable to convert [%s] to long, defaulting to 0", 
-    					stringFilePointer));
-    		}
-    	}
-    	
-    	return filePointer != null ? filePointer : 0;
-    }
-	
-	private void closeRandomAccessFile(String filepath, OptimizedRandomAccessFile randomAccessFile) {
-		if (randomAccessFile != null) {
-			try {
-				randomAccessFile.close();
-			} catch (IOException e) {
-				LOGGER.error("Unable to close file " + filepath);
-			}
-		}
-	}
-	
-	private void closeFileWriter(String filepath, FileWriter fileWriter) {
-		if (fileWriter != null) {
-			try {
-				fileWriter.close();
-			} catch (IOException e) {
-				LOGGER.error("Unable to close file " + filepath);
-			}
-		}
-	}
-	
-	private void debugLog(String msg) {
-		if (LOGGER.isDebugEnabled()) {
-			LOGGER.debug(msg);
-		}
-	}
 	
     public static String getImplementationVersion(){
         return LogMonitor.class.getPackage().getImplementationTitle();

@@ -69,7 +69,7 @@ metricPrefix: "Custom Metrics|LogMonitor|"
 
 ##Metric Path
 
-Application Infrastructure Performance|\<Tier\>|Custom Metrics|LogMonitor|\<LogName\>|Search String|<searchStrings displayName>|\<Matched Term\>
+Application Infrastructure Performance|\<Tier\>|Custom Metrics|LogMonitor|\<LogName\>|Search String|\<searchStrings displayName\>|\<Matched Term\>
 
 Application Infrastructure Performance|\<Tier\>|Custom Metrics|LogMonitor|\<LogName\>|File size (Bytes)
 

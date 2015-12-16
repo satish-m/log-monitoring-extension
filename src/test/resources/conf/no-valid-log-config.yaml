@@ -8,13 +8,16 @@ logs:
     logDirectory: "src/test/resources"
     logName: ""
     searchStrings:
-       - pattern: "debug"
+       - displayName: "Debug"
+         pattern: "debug"
          matchExactString: true
          caseSensitive: false
-       - pattern: "info"
+       - displayName: "Info"
+         pattern: "info"
          matchExactString: true
          caseSensitive: false
-       - pattern: "error"
+       - displayName: "Error"
+         pattern: "error"
          matchExactString: true
          caseSensitive: false
     

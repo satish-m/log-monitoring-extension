@@ -3,6 +3,7 @@ logs:
     logDirectory: "/Users/Muddam/AppDynamics/MachineAgent_4.1.2/logs"
     logName: "machine-agent.log"
     searchStrings:
+        #displayName Should be unique across the patterns including the case.
        - displayName: "Debug In Caps"
          pattern: "DEBUG"
          matchExactString: false

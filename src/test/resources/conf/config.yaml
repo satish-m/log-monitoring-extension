@@ -3,22 +3,28 @@ logs:
     logDirectory: "src/test/resources"
     logName: "test-log-regex.log"
     searchStrings:
-       - pattern: "(\\s|^)m\\w+(\\s|$)"
+       - displayName: "Words with m"
+         pattern: "(\\s|^)m\\w+(\\s|$)"
          matchExactString: false
          caseSensitive: false
-       - pattern: "<\\w*>"
+       - displayName: "Words with <"
+         pattern: "<\\w*>"
          matchExactString: false
          caseSensitive: false
-       - pattern: "\\[JMX.*\\]"
+       - displayName: "Words with [jmx"
+         pattern: "\\[JMX.*\\]"
          matchExactString: false
          caseSensitive: false
-       - pattern: "debug"
+       - displayName: "Debug"
+         pattern: "debug"
          matchExactString: false
          caseSensitive: false
-       - pattern: "info"
+       - displayName: "Info"
+         pattern: "info"
          matchExactString: false
          caseSensitive: false
-       - pattern: "error"
+       - displayName: "Error"
+         pattern: "error"
          matchExactString: false
          caseSensitive: false
 
@@ -26,13 +32,16 @@ logs:
     logDirectory: "src/test/resources"
     logName: "test-log-1.log"
     searchStrings:
-       - pattern: "debug"
+       - displayName: "Debug"
+         pattern: "debug"
          matchExactString: true
          caseSensitive: false
-       - pattern: "info"
+       - displayName: "Info"
+         pattern: "info"
          matchExactString: true
          caseSensitive: false
-       - pattern: "error"
+       - displayName: "Error"
+         pattern: "error"
          matchExactString: true
          caseSensitive: false
     

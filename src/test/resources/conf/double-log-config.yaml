@@ -3,13 +3,16 @@ logs:
     logDirectory: "src/test/resources"
     logName: "test-log-1.log"
     searchStrings:
-       - pattern: "debug"
+       - displayName: "Debug"
+         pattern: "debug"
          matchExactString: false
          caseSensitive: false
-       - pattern: "info"
+       - displayName: "Info"
+         pattern: "info"
          matchExactString: false
          caseSensitive: false
-       - pattern: "error"
+       - displayName: "Error"
+         pattern: "error"
          matchExactString: false
          caseSensitive: false
     
@@ -17,7 +20,8 @@ logs:
     logDirectory: "src/test/resources"
     logName: "test-log-2.log"
     searchStrings:
-       - pattern: "trace"
+       - displayName: "Trace"
+         pattern: "trace"
          matchExactString: true
          caseSensitive: false
     

@@ -29,8 +29,10 @@ Note: By default, the Machine agent can only send a fixed number of metrics to t
 | displayName | The display name of the log file. If not specified, logName is used by default. |
 | logDirectory | The directory path where the log is located. |
 | logName | The name of the log file, i.e. server.log. Supports wildcard character for filename that changes dynamically on rotation, e.g. server-*.log|
-| searchStrings | The strings to search, e.g. "debug", "info", "error". Supports regex if matchExactString is set to false. Note, this is case insensitive regardless.|
-| matchExactString | Allowed values: **true** or **false**. Set to true if you only want to match the exact string, otherwise set to false for regex support and contains in string. |
+| searchStrings/displayName | Display name for this pattern |
+| searchStrings/pattern | The strings to search, e.g. "debug", "info", "error". Supports regex if matchExactString is set to false. Note, this is case insensitive regardless.|
+| searchStrings/matchExactString | Allowed values: **true** or **false**. Set to true if you only want to match the exact string, otherwise set to false for regex support and contains in string. |
+| searchStrings/caseSensitive | Allowed values: **true** or **false**. Set to true if you want the search to be case sensitive, otherwise false |
 | ----- | ----- |
 | noOfThreads | The no of threads used to process multiple logs concurrently |
 | metricPrefix | The path prefix for viewing metrics in the metric browser. Default value is "Custom Metrics\|LogMonitor\|" |
@@ -39,26 +41,35 @@ Below is an example config with multiple log files to monitor, one of which uses
 
 ~~~~
 logs:
-  - displayName: "SimpleLog"
-    logDirectory: "/var/log"
-    logName: "server.log"
-    searchStrings: ["debug", "info", "error"]
-    matchExactString: true
+  - displayName: "Machine Agent Log"
+    logDirectory: "/Users/Muddam/AppDynamics/MachineAgent_4.1.2/logs"
+    logName: "machine-agent.log"
+    searchStrings:
+        #displayName Should be unique across the patterns including the case.
+       - displayName: "Debug In Caps"
+         pattern: "DEBUG"
+         matchExactString: false
+         caseSensitive: true
+       - displayName: "Debug"
+         pattern: "Debug"
+         matchExactString: false
+         caseSensitive: true
+       - displayName: "Info"
+         pattern: "Info"
+         matchExactString: false
+         caseSensitive: false
 
-  - displayName: "DynamicLog"
-    logDirectory: "/var/log"
-    logName: "server-*.log"
-    searchStrings: ["deb\\w+g", "in\\w+o", "err\\w+r", ">", "<"]
-    matchExactString: false
-    
+        
+# Number of concurrent threads
 noOfThreads: 3
 
+#prefix used to show up metrics in AppDynamics 
 metricPrefix: "Custom Metrics|LogMonitor|"
 ~~~~
 
 ##Metric Path
 
-Application Infrastructure Performance|\<Tier\>|Custom Metrics|LogMonitor|\<LogName\>|Search String|\<Search Term\>
+Application Infrastructure Performance|\<Tier\>|Custom Metrics|LogMonitor|\<LogName\>|Search String|<searchStrings displayName>|\<Matched Term\>
 
 Application Infrastructure Performance|\<Tier\>|Custom Metrics|LogMonitor|\<LogName\>|File size (Bytes)
 

@@ -3,13 +3,20 @@ logs:
     logDirectory: ""
     logName: "test-log-regex.log"
     searchStrings: [ ]
-    matchExactString: false
-    
+
   - displayName: ""
     logDirectory: "src/test/resources"
     logName: ""
-    searchStrings: ["debug", "info", "error"]
-    matchExactString: true
+    searchStrings:
+       - pattern: "debug"
+         matchExactString: true
+         caseSensitive: false
+       - pattern: "info"
+         matchExactString: true
+         caseSensitive: false
+       - pattern: "error"
+         matchExactString: true
+         caseSensitive: false
     
 # Number of concurrent threads
 noOfThreads: 3

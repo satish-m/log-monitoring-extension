@@ -1,9 +1,21 @@
 logs:
-  - displayName: ""
-    logDirectory: ""
-    logName: ""
-    searchStrings: [ ]
-    matchExactString: false
+  - displayName: "Machine Agent Log"
+    logDirectory: "/Users/Muddam/AppDynamics/MachineAgent_4.1.2/logs"
+    logName: "machine-agent.log"
+    searchStrings:
+       - displayName: "Debug In Caps"
+         pattern: "DEBUG"
+         matchExactString: false
+         caseSensitive: true
+       - displayName: "Debug"
+         pattern: "Debug"
+         matchExactString: false
+         caseSensitive: true
+       - displayName: "Info"
+         pattern: "Info"
+         matchExactString: false
+         caseSensitive: false
+
         
 # Number of concurrent threads
 noOfThreads: 3

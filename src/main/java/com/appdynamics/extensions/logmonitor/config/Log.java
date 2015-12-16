@@ -1,5 +1,6 @@
 package com.appdynamics.extensions.logmonitor.config;
 
+import java.util.List;
 import java.util.Set;
 
 import org.apache.commons.lang.builder.ReflectionToStringBuilder;
@@ -17,9 +18,7 @@ public class Log {
 
 	private String logName;
 
-	private Set<String> searchStrings;
-
-	private Boolean matchExactString;
+	private List<SearchString> searchStrings;
 
 	public String getDisplayName() {
 		return displayName;
@@ -45,21 +44,12 @@ public class Log {
 		this.logName = logName;
 	}
 
-	public Set<String> getSearchStrings() {
+	public List<SearchString> getSearchStrings() {
 		return searchStrings;
 	}
 
-	public void setSearchStrings(Set<String> searchStrings) {
+	public void setSearchStrings(List<SearchString> searchStrings) {
 		this.searchStrings = searchStrings;
-	}
-
-	public Boolean getMatchExactString() {
-		return this.matchExactString != null ?
-				this.matchExactString : Boolean.FALSE;
-	}
-
-	public void setMatchExactString(Boolean matchExactString) {
-		this.matchExactString = matchExactString;
 	}
 
 	@Override

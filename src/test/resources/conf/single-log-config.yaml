@@ -2,9 +2,17 @@ logs:
   - displayName: "TestLog"
     logDirectory: "src/test/resources"
     logName: "test-log-1.log"
-    searchStrings: ["debug", "info", "error"]
-    matchExactString: true
-    
+    searchStrings:
+       - pattern: "debug"
+         matchExactString: true
+         caseSensitive: false
+       - pattern: "info"
+         matchExactString: true
+         caseSensitive: false
+       - pattern: "error"
+         matchExactString: true
+         caseSensitive: false
+
 # Number of concurrent threads
 noOfThreads: 3
 

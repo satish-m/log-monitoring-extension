@@ -21,7 +21,7 @@ import com.appdynamics.extensions.logmonitor.LogMonitor;
  */
 public class FilePointerProcessor {
 	
-	public static final Logger LOGGER = Logger.getLogger("com.singularity.extensions.logmonitor.FilePointerProcessor");
+	public static final Logger LOGGER = Logger.getLogger(FilePointerProcessor.class);
 	
 	private ConcurrentHashMap<String, FilePointer> filePointers = new ConcurrentHashMap<String, FilePointer>();
 	

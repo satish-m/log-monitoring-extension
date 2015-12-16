@@ -73,6 +73,9 @@ Application Infrastructure Performance|\<Tier\>|Custom Metrics|LogMonitor|\<LogN
 
 Application Infrastructure Performance|\<Tier\>|Custom Metrics|LogMonitor|\<LogName\>|File size (Bytes)
 
+##Custom Dashboard
+![](https://raw.github.com/Appdynamics/log-monitoring-extension/master/LogMonitorCustomDashboard.png)
+
 ##Contributing
 
 Always feel free to fork and contribute any changes directly here on GitHub

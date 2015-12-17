@@ -16,6 +16,10 @@ logs:
          pattern: "Info"
          matchExactString: false
          caseSensitive: false
+       - displayName: "DynamicLog"
+         pattern: "system\\w+"
+         matchExactString: false
+         caseSensitive: false
 
         
 # Number of concurrent threads

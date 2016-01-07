@@ -108,7 +108,7 @@ public class LogMonitorTest {
 	
 	private void setupTestMetricsAndLogMetricTask() throws Exception {
 		LogMetrics logMetrics = new LogMetrics();
-		logMetrics.add("TestLog|Search String|Debug", BigInteger.valueOf(7));
+		logMetrics.add("TestLog|Search String|Debug", BigInteger.valueOf(8));
 		logMetrics.add("TestLog|Search String|Info", BigInteger.valueOf(8));
 		logMetrics.add("TestLog|Search String|Error", BigInteger.valueOf(9));
 		logMetrics.add("TestLog|File size (Bytes)", BigInteger.valueOf(10));

@@ -87,7 +87,7 @@ public class LogMonitorTest {
 		
 		classUnderTest.execute(args, null);
 		
-		verifyNotCalled("Custom Metrics|LogMonitor|TestLog|Search String|Debug", BigInteger.valueOf(7));
+		verifyNotCalled("Custom Metrics|LogMonitor|TestLog|Search String|Debug", BigInteger.valueOf(8));
 		verifyNotCalled("Custom Metrics|LogMonitor|TestLog|Search String|Info", BigInteger.valueOf(8));
 		verifyNotCalled("Custom Metrics|LogMonitor|TestLog|Search String|Error", BigInteger.valueOf(9));
 		verifyNotCalled("Custom Metrics|LogMonitor|TestLog|File size (Bytes)", BigInteger.valueOf(10));
